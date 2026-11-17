@@ -1,99 +1,100 @@
-[README.md](https://github.com/user-attachments/files/34223329/README.md)
-# Inventario-Ropa-Mayoreo-Unidad2.
-Proyecto de Unidad 2 - Inventario y ventas de ropa con descuentos por mayoreo.
-# Inventario de Ropa con Descuentos por Mayoreo
+[README (1).md](https://github.com/user-attachments/files/34959803/README.1.md)
+# Sistema de Ventas e Inventario de Ropa - Unidad 3
 
-**Proyecto de la Unidad 2 - Lenguajes de Interfaz**
+**Materia:** Lenguajes de Interfaz  
+**Lenguaje:** Ensamblador MASM x86 de 32 bits con Irvine32  
+**Proyecto:** Macros, procedimientos y USES
 
 ## Integrantes
 
 - Oscar Javier Chaidez Salazar
-- Ángel Daniel Vega Hernández
+- Angel Daniel Vega Hernandez
 
-## ¿De qué trata el proyecto?
+## Descripcion
 
-Este programa permite llevar el inventario y las ventas de una tienda de ropa. Está hecho en lenguaje ensamblador **MASM x86 de 32 bits**, utilizando la biblioteca **Irvine32** y **Visual Studio**.
+Este proyecto es una mejora del sistema de ventas e inventario de ropa realizado en la Unidad 2. Permite registrar prendas, consultar el inventario, recibir mercancia, vender y guardar los productos en el archivo `ropa.dat`.
 
-El inventario admite un máximo de **10 productos diferentes**, con hasta **100 unidades de cada producto**.
+En la Unidad 3 se organizaron mejor varias partes del codigo, usando **macros**, **procedimientos reutilizables** y **USES**, sin cambiar las funciones principales ni la regla de descuentos por mayoreo.
 
-## Opciones del programa
+## Funciones del programa
 
-1. **Registrar prenda:** captura código, nombre, precio y existencias.
-2. **Mostrar inventario:** muestra las prendas registradas.
-3. **Buscar prenda:** encuentra un producto por su código.
-4. **Recibir mercancía:** aumenta las existencias sin superar 100 unidades.
-5. **Vender prendas:** calcula el importe, aplica el descuento y descuenta las unidades vendidas.
-6. **Resumen:** muestra las unidades disponibles, el valor del inventario y los ingresos de la sesión.
-7. **Guardar inventario:** guarda los productos en `ropa.dat`.
-8. **Cargar inventario:** recupera los productos de `ropa.dat`.
-0. **Salir:** cierra el programa y pregunta si deseas guardar cuando hay cambios pendientes.
+1. Registrar prendas.
+2. Mostrar inventario.
+3. Buscar una prenda por codigo.
+4. Recibir mercancia.
+5. Vender prendas con descuento por mayoreo.
+6. Mostrar resumen de inventario e ingresos.
+7. Guardar el inventario en `ropa.dat`.
+8. Cargar el inventario desde `ropa.dat`.
+0. Salir.
 
-## Regla adicional: descuento por mayoreo
+**Limites:** hasta 10 productos distintos; cada producto admite de 0 a 100 unidades. Los precios se almacenan como centavos enteros y los codigos siguen el formato `ABC-123`.
 
-La cantidad comprada **en una sola venta** determina el descuento:
+## Descuentos por mayoreo
 
-| Cantidad | Descuento |
+| Cantidad en una venta | Descuento |
 |---|---:|
 | 1 a 9 prendas | 0 % |
 | 10 a 19 prendas | 10 % |
-| 20 o más prendas | 15 % |
+| 20 o mas prendas | 15 % |
 
-Ejemplo: si una playera cuesta **$250.00 MXN** y se venden **12**, el subtotal es **$3,000.00 MXN**, el descuento es **$300.00 MXN** y el cliente paga **$2,700.00 MXN**.
+El descuento se aplica a una sola prenda por venta, siempre que existan unidades suficientes.
 
-Los descuentos se aplican solo cuando hay suficientes existencias.
+## Cambios de la Unidad 3
 
-## Reglas principales
+- **Macro `MOSTRAR mensaje`:** reemplaza instrucciones repetidas para mostrar mensajes.
+- **Macro `MOSTRAR_IMPORTE mensaje, valor`:** muestra un importe con dos decimales y la etiqueta MXN; se utiliza en `Vender` y `Resumen`.
+- **Procedimiento `PedirCantidad`:** se reutiliza en `Recibir` y `Vender`; devuelve la cantidad en `EAX` y la validez en `EDX`.
+- **`USES`:** conserva los registros que deben recuperar su valor original al terminar ciertos procedimientos. Los registros utilizados para devolver resultados se dejan fuera de `USES`.
 
-- Máximo de 10 tipos de prendas.
-- Código único con formato `ABC-123`.
-- Nombre de 1 a 25 caracteres.
-- Precio desde $0.01 hasta $9,999.99 MXN.
-- Existencias de 0 a 100 unidades por producto.
-- Los precios se guardan como **centavos enteros** para hacer los cálculos.
-- Las ventas y entradas de mercancía se validan antes de actualizar el inventario.
+Las macros no usan `LOCAL` porque no contienen etiquetas internas. MASM expande las instrucciones de cada macro donde se utiliza.
 
-## Archivos del repositorio
+## Comparacion con la Unidad 2
+
+| Criterio | Unidad 2 | Unidad 3 |
+|---|---:|---:|
+| Lineas fisicas del archivo fuente | 901 | 873 |
+| Lineas no vacias y sin comentarios completos | 825 | 785 |
+
+Se uso el mismo criterio para ambas versiones. Las macros reducen el codigo repetido del archivo `.asm`, pero no necesariamente el codigo maquina generado.
+
+## Archivos del proyecto
 
 ```text
-Inventario-Ropa-Mayoreo-Unidad2/
+Inventario-Ropa-Macros-U3/
 |-- Projectu2.slnx
 |-- README.md
-|-- Informe_Proyecto.pdf        (pendiente de agregar)
-|-- Tabla_Pruebas.xlsx          (pendiente de agregar)
+|-- Informe_U2_y_U3_Actualizado.pdf
+|-- Tabla_Pruebas_U3.xlsx
 `-- ProjectPract/
+    |-- main.asm
     |-- ProjectPract.vcxproj
     |-- ProjectPract.vcxproj.filters
-    |-- main.asm
     `-- ropa.dat
 ```
 
-**Nota:** la solución `Projectu2.slnx` busca el archivo `ProjectPract/ProjectPract.vcxproj`, por eso es importante respetar la estructura de carpetas.
+El informe actualizado contiene la explicacion de la Unidad 2 y la seccion **Version de la Unidad 3** con los cambios realizados. La tabla de pruebas debe completarse con resultados obtenidos durante la ejecucion real.
 
-## Cómo compilar y ejecutar
+## Requisitos
 
-1. En una computadora con **Windows**, instala Visual Studio con las herramientas de desarrollo de C++ y el ensamblador MASM.
-2. Prepara la biblioteca **Irvine32 de 32 bits**. La configuración incluida en `ProjectPract.vcxproj` busca sus archivos en `C:\Irvine`. Si los tienes en otra carpeta, cambia las rutas de inclusión y bibliotecas en las propiedades del proyecto.
-3. Descarga el repositorio desde GitHub (`Code` → `Download ZIP`) y extrae su contenido, o clónalo con Git.
-4. Abre `Projectu2.slnx` en una versión de Visual Studio compatible con archivos `.slnx`.
-5. Selecciona la configuración **Debug | Win32**. **No uses x64** para este proyecto, ya que utiliza Irvine32.
-6. Compila la solución con **Compilar → Compilar solución** (o `Ctrl+Shift+B`).
-7. Ejecuta el programa sin depuración con `Ctrl+F5`.
-8. En el menú, utiliza la opción **8. Cargar inventario** si deseas recuperar los productos de `ropa.dat`.
+- Windows y Visual Studio con herramientas de compilacion C++ y MASM.
+- Biblioteca Irvine32 para 32 bits.
+- El proyecto esta configurado para buscar Irvine32 en `C:\Irvine`. Si esta instalada en otra ubicacion, ajustar las rutas del proyecto.
+- Usar la plataforma **x86 / Win32**, no x64.
 
-**Importante sobre `ropa.dat`:** el programa abre el archivo usando una ruta relativa. Si no lo encuentra, colócalo en el **directorio de trabajo** desde el que se ejecuta el programa o ajusta ese directorio en las propiedades de depuración de Visual Studio. Al guardar con la opción 7, el archivo se crea en ese directorio de trabajo.
+## Como compilar y ejecutar
 
-## Pruebas sugeridas para la demostración
+1. Descargar el repositorio con **Code > Download ZIP** y extraerlo.
+2. Abrir `Projectu2.slnx` en Visual Studio.
+3. Seleccionar **Debug | x86 (Win32)**.
+4. Presionar **Ctrl + Shift + B** para compilar.
+5. Presionar **Ctrl + F5** para ejecutar el programa.
+6. Para consultar el inventario de prueba, elegir **8. Cargar inventario** y luego **2. Mostrar inventario**.
 
-- Registrar una prenda válida y rechazar un código repetido.
-- Buscar una prenda existente y una inexistente.
-- Recibir mercancía sin rebasar 100 unidades y rechazar una entrada que exceda el límite.
-- Vender con 0 %, 10 % y 15 % de descuento.
-- Intentar vender más prendas de las disponibles y confirmar que no se modifique el inventario.
-- Mostrar el resumen del inventario.
-- Guardar, cerrar, abrir de nuevo y cargar `ropa.dat`.
+**Nota sobre `ropa.dat`:** el programa busca este archivo en su directorio de trabajo. Si no lo encuentra, copiarlo al directorio de trabajo configurado en Visual Studio, o cambiar esa configuracion.
 
-Los **resultados obtenidos** de estas pruebas se documentarán en `Tabla_Pruebas.xlsx` después de ejecutarlas en Visual Studio. No se incluyen resultados de prueba no verificados.
+## Pruebas
 
-## Nota sobre las herramientas
+Las pruebas incluyen registro, busqueda, entrada de mercancia, ventas aceptadas y rechazadas, descuentos del 0 %, 10 % y 15 %, resumen, guardado y carga.
 
-Para compilar en otra computadora se necesita instalar y configurar MASM, Visual Studio e Irvine32. El repositorio contiene el código del proyecto y el inventario de ejemplo, pero no la biblioteca Irvine32 ni herramientas de Visual Studio.
+**Estado:** la compilacion y los resultados obtenidos de la version U3 deben comprobarse en Visual Studio y registrarse en `Tabla_Pruebas_U3.xlsx` antes de la entrega final.
