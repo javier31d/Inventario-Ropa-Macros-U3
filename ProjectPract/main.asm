@@ -1,10 +1,11 @@
-.386                    ; Permite usar registros de 32 bits
-.model flat, stdcall     ; Configura la memoria y los procedimientos
-.stack 4096             ; Reserva espacio para la pila
-option casemap:none     ; Distingue mayusculas y minusculas
+.386
+.model flat, stdcall
+.stack 4096
+option casemap:none
 INCLUDE Irvine32.inc
 
-; Limites del inventario.
+; Inventario de ropa: maximo 10 tipos de prenda.
+; El precio se almacena en centavos: $250.00 = 25000.
 MAX_PROD EQU 10
 TAM_COD EQU 8
 TAM_NOM EQU 26
@@ -13,6 +14,23 @@ OFF_COD EQU 4
 OFF_NOM EQU OFF_COD + MAX_PROD*TAM_COD
 OFF_PRE EQU OFF_NOM + MAX_PROD*TAM_NOM
 OFF_STK EQU OFF_PRE + MAX_PROD*4
+
+
+; Muestra un mensaje. Usa EDX para pasar la direccion.
+MOSTRAR MACRO mensaje
+    mov edx, OFFSET mensaje
+    call WriteString
+ENDM
+
+; Muestra un importe en pesos y centavos con su texto.
+; Se usa en ventas y en resumen. Usa EAX y EDX.
+MOSTRAR_IMPORTE MACRO mensaje, valor
+    MOSTRAR mensaje
+    mov eax, valor
+    call MostrarPrecio
+    MOSTRAR mMXN
+    call Crlf
+ENDM
 
 .data
 menuTxt BYTE 13,10,"===== TIENDA DE ROPA =====",13,10
@@ -61,7 +79,7 @@ mSalir BYTE "Guardar antes de salir? (S/N): ",0
 mAdios BYTE "Fin del programa.",13,10,0
 archivo BYTE "ropa.dat",0
 
-; Productos guardados en el archivo.
+; Datos que se guardan juntos: 424 bytes.
 inicioDatos LABEL BYTE
 numProductos DWORD 0
 codigos BYTE MAX_PROD*TAM_COD DUP(0)
@@ -69,7 +87,7 @@ nombres BYTE MAX_PROD*TAM_NOM DUP(0)
 precios DWORD MAX_PROD DUP(0)
 stocks DWORD MAX_PROD DUP(0)
 
-; Datos usados mientras corre el programa.
+; Datos temporales: nunca se guardan.
 entrada BYTE 128 DUP(0)
 codigoTmp BYTE TAM_COD DUP(0)
 nombreTmp BYTE TAM_NOM DUP(0)
@@ -90,15 +108,10 @@ bufferArchivo BYTE TAM_DATOS+1 DUP(0)
 textoNumero BYTE 16 DUP(0)
 
 .code
-
-
-; Muestra el menu y abre la opcion elegida.
+; Entrada: opcion del usuario. Salida: menu y llamadas. Registros: EAX, EDX.
 main PROC
-
-; Se repite el menu hasta que el usuario salga.
 MenuPrincipal:
-    mov edx, OFFSET menuTxt
-    call WriteString
+    MOSTRAR menuTxt
     call LeerTexto
     call AEntero
     cmp edx, 1
@@ -122,8 +135,7 @@ MenuPrincipal:
     cmp eax, 8
     je Op8
 OpcionMala:
-    mov edx, OFFSET mMal
-    call WriteString
+    MOSTRAR mMal
     jmp MenuPrincipal
 Op1:
     call Registrar
@@ -156,8 +168,6 @@ Op8:
 CargarDirecto:
     call Cargar
     jmp MenuPrincipal
-
-; Revisa si hay cambios antes de salir.
 Salir:
     cmp cambios, 0
     je Fin
@@ -169,13 +179,12 @@ Salir:
     cmp eax, 1
     jne MenuPrincipal
 Fin:
-    mov edx, OFFSET mAdios
-    call WriteString
+    MOSTRAR mAdios
     exit
 main ENDP
 
-
-; Lee lo que escribe el usuario.
+; Lee una linea a 'entrada'. EDX queda libre despues de la llamada.
+; Entrada: ninguna. Salida: entrada y longitud en EAX. ECX/EDX preservados.
 LeerTexto PROC USES ecx edx
     mov edx, OFFSET entrada
     mov ecx, SIZEOF entrada - 1
@@ -183,8 +192,8 @@ LeerTexto PROC USES ecx edx
     ret
 LeerTexto ENDP
 
-
-; Pregunta si o no.
+; Lee S o s como SI. Entrada: EDX=mensaje. Salida: EAX=1 o 0.
+; Entrada: EDX=mensaje. Salida: EAX=1 (si) o 0 (no). EDX preservado.
 PreguntarSi PROC USES edx
     call WriteString
     call LeerTexto
@@ -200,8 +209,8 @@ PS_Si:
     ret
 PreguntarSi ENDP
 
-
-; Pasa un texto a numero entero.
+; Texto entero sin signo -> EAX numero, EDX=1 valido/0 error.
+; Entrada: entrada. Salida: EAX=numero, EDX=validez. EBX/ECX/ESI preservados.
 AEntero PROC USES ebx ecx esi
     xor eax, eax
     xor ecx, ecx
@@ -233,13 +242,14 @@ AE_Error:
     ret
 AEntero ENDP
 
-
-; Pasa un precio a centavos.
+; Convierte precio escrito como 250, 250.5 o 250.50 a centavos.
+; EAX=centavos; EDX=1 valido/0 invalido.
+; Entrada: entrada. Salida: EAX=centavos, EDX=validez. EBX/ECX/ESI/EDI preservados.
 APrecio PROC USES ebx ecx esi edi
     xor eax, eax
-    xor ebx, ebx            ; Cuenta los decimales
-    xor ecx, ecx            ; Cuenta los numeros antes del punto
-    xor edi, edi            ; Marca si hay punto
+    xor ebx, ebx            ; cantidad de decimales
+    xor ecx, ecx            ; digitos antes del punto
+    xor edi, edi            ; 1 si aparece punto
     mov esi, OFFSET entrada
 AP_Bucle:
     movzx edx, BYTE PTR [esi]
@@ -267,8 +277,6 @@ AP_Decimal:
 AP_Siguiente:
     inc esi
     jmp AP_Bucle
-
-; Aqui empieza la parte de los centavos.
 AP_Punto:
     cmp edi, 0
     jne AP_Error
@@ -294,8 +302,6 @@ AP_100:
 AP_10:
     imul eax, eax, 10
     jo AP_Error
-
-; Revisamos el precio minimo y maximo.
 AP_Limite:
     cmp eax, 1
     jb AP_Error
@@ -309,8 +315,8 @@ AP_Error:
     ret
 APrecio ENDP
 
-
-; Muestra un numero sin usar WriteDec.
+; Muestra un entero sin WriteDec: divisiones entre 10.
+; Entrada: EAX=entero. Salida: texto en consola. EAX/EBX/EDX/EDI preservados.
 MostrarEntero PROC USES eax ebx edx edi
     mov edi, OFFSET textoNumero + SIZEOF textoNumero - 1
     mov BYTE PTR [edi], 0
@@ -328,8 +334,8 @@ ME_Bucle:
     ret
 MostrarEntero ENDP
 
-
-; Muestra pesos y centavos.
+; EAX=centavos: muestra pesos.punto.dos decimales.
+; Entrada: EAX=centavos. Salida: pesos y dos decimales. EAX/EBX/EDX preservados.
 MostrarPrecio PROC USES eax ebx edx
     xor edx, edx
     mov ebx, 100
@@ -350,8 +356,8 @@ MP_Fin:
     ret
 MostrarPrecio ENDP
 
-
-; Revisa que el codigo tenga forma ABC-123.
+; ESI apunta a codigo de 8 bytes. EAX=1 si cumple ABC-123.
+; Entrada: ESI=codigo de 8 bytes. Salida: EAX=1/0. ECX/ESI preservados.
 CodigoValido PROC USES ecx esi
     mov ecx, 3
 CV_Letras:
@@ -366,8 +372,6 @@ CV_Letras:
     jne CV_Error
     inc esi
     mov ecx, 3
-
-; Ahora revisa los tres numeros.
 CV_Digitos:
     mov al, [esi]
     cmp al, '0'
@@ -385,12 +389,10 @@ CV_Error:
     ret
 CodigoValido ENDP
 
-
-; Busca el codigo entre las prendas.
+; Busca codigoTmp. EAX=indice (0-9) o -1 si no existe.
+; Entrada: codigoTmp. Salida: EAX=indice o -1. EBX/ECX/ESI/EDI preservados.
 IndiceCodigo PROC USES ebx ecx esi edi
     xor ebx, ebx
-
-; Compara el codigo con cada prenda.
 IC_Bucle:
     cmp ebx, numProductos
     jae IC_No
@@ -412,11 +414,10 @@ IC_No:
     ret
 IndiceCodigo ENDP
 
-
-; Pide un codigo y busca la prenda.
+; Pide codigo, lo valida y devuelve su indice o -1.
+; Entrada: texto del usuario. Salida: EAX=indice o -1. ECX/EDX/ESI/EDI preservados.
 PedirProducto PROC USES ecx edx esi edi
-    mov edx, OFFSET pedCod
-    call WriteString
+    MOSTRAR pedCod
     call LeerTexto
     mov esi, OFFSET entrada
     call CodigoValido
@@ -434,15 +435,11 @@ PP_No:
     ret
 PedirProducto ENDP
 
-
-; Registra una prenda nueva.
+; Entrada: codigo, nombre, precio y stock. Salida: alta valida. Registros generales preservados.
 Registrar PROC USES eax ebx ecx edx esi edi
     cmp numProductos, MAX_PROD
     jae R_Lleno
-
-; Primero pide el codigo.
-    mov edx, OFFSET pedCod
-    call WriteString
+    MOSTRAR pedCod
     call LeerTexto
     mov esi, OFFSET entrada
     call CodigoValido
@@ -457,10 +454,7 @@ Registrar PROC USES eax ebx ecx edx esi edi
     cmp eax, -1
     jne R_Duplicado
 
-
-; Despues pide el nombre.
-    mov edx, OFFSET pedNom
-    call WriteString
+    MOSTRAR pedNom
     call LeerTexto
     cmp eax, 1
     jb R_Error
@@ -472,20 +466,14 @@ Registrar PROC USES eax ebx ecx edx esi edi
     cld
     rep movsb
 
-
-; Ahora pide el precio.
-    mov edx, OFFSET pedPre
-    call WriteString
+    MOSTRAR pedPre
     call LeerTexto
     call APrecio
     cmp edx, 1
     jne R_Error
     mov precioTmp, eax
 
-
-; Por ultimo pide las existencias.
-    mov edx, OFFSET pedStk
-    call WriteString
+    MOSTRAR pedStk
     call LeerTexto
     call AEntero
     cmp edx, 1
@@ -494,7 +482,7 @@ Registrar PROC USES eax ebx ecx edx esi edi
     ja R_Error
     mov stockTmp, eax
 
-; Guarda la prenda solo si todos los datos estan bien.
+    ; Solo al final (todo valido) se modifica el inventario.
     mov eax, numProductos
     shl eax, 3
     lea edi, codigos[eax]
@@ -514,8 +502,7 @@ Registrar PROC USES eax ebx ecx edx esi edi
     mov stocks[esi*4], eax
     inc numProductos
     mov cambios, 1
-    mov edx, OFFSET mRegistrado
-    call WriteString
+    MOSTRAR mRegistrado
     ret
 R_Lleno:
     mov edx, OFFSET mLleno
@@ -530,43 +517,35 @@ R_Aviso:
     ret
 Registrar ENDP
 
-
-; Muestra los datos de una prenda.
+; ESI=indice; muestra un solo producto.
+; Entrada: ESI=indice. Salida: datos en consola. EAX/EDX/ESI preservados.
 MostrarUno PROC USES eax edx esi
-    mov edx, OFFSET mCodigo
-    call WriteString
+    MOSTRAR mCodigo
     mov eax, esi
     shl eax, 3
     lea edx, codigos[eax]
     call WriteString
-    mov edx, OFFSET mNombre
-    call WriteString
+    MOSTRAR mNombre
     mov eax, esi
     imul eax, eax, TAM_NOM
     lea edx, nombres[eax]
     call WriteString
-    mov edx, OFFSET mPrecio
-    call WriteString
+    MOSTRAR mPrecio
     mov eax, precios[esi*4]
     call MostrarPrecio
-    mov edx, OFFSET mMXN
-    call WriteString
-    mov edx, OFFSET mStock
-    call WriteString
+    MOSTRAR mMXN
+    MOSTRAR mStock
     mov eax, stocks[esi*4]
     call MostrarEntero
     call Crlf
     ret
 MostrarUno ENDP
 
-
-; Muestra todas las prendas.
+; Entrada: inventario. Salida: lista por consola. EDX/ESI preservados.
 MostrarTodo PROC USES edx esi
     cmp numProductos, 0
     je MT_Vacio
     xor esi, esi
-
-; Pasa de una prenda a la siguiente.
 MT_Bucle:
     cmp esi, numProductos
     jae MT_Fin
@@ -574,14 +553,12 @@ MT_Bucle:
     inc esi
     jmp MT_Bucle
 MT_Vacio:
-    mov edx, OFFSET mVacio
-    call WriteString
+    MOSTRAR mVacio
 MT_Fin:
     ret
 MostrarTodo ENDP
 
-
-; Busca y muestra una prenda.
+; Entrada: codigo del usuario. Salida: datos o error. EAX/EDX/ESI preservados.
 Buscar PROC USES eax edx esi
     call PedirProducto
     cmp eax, -1
@@ -590,26 +567,38 @@ Buscar PROC USES eax edx esi
     call MostrarUno
     ret
 B_No:
-    mov edx, OFFSET mNo
-    call WriteString
+    MOSTRAR mNo
     ret
 Buscar ENDP
 
+; Pide la cantidad de prendas y la convierte a entero.
+; Recibe: nada. Devuelve: EAX=cantidad y EDX=1 si es valida.
+; Conserva: EBX, ECX, ESI. EAX y EDX son resultados.
+PedirCantidad PROC
+    MOSTRAR pedCant
+    call LeerTexto
+    call AEntero
+    cmp edx, 1
+    jne PC_Error
+    cmp eax, 1
+    jb PC_Error
+    ret
+PC_Error:
+    xor eax, eax
+    xor edx, edx
+    ret
+PedirCantidad ENDP
 
-; Suma unidades al inventario.
+; Entrada: codigo y cantidad. Salida: stock actualizado o error.
+; Conserva: EAX, EBX, EDX, ESI.
 Recibir PROC USES eax ebx edx esi
     call PedirProducto
     cmp eax, -1
     je RV_No
     mov indice, eax
-    mov edx, OFFSET pedCant
-    call WriteString
-    call LeerTexto
-    call AEntero
+    call PedirCantidad
     cmp edx, 1
     jne RV_Error
-    cmp eax, 1
-    jb RV_Error
     cmp eax, 100
     ja RV_Exceso
     mov esi, indice
@@ -617,12 +606,9 @@ Recibir PROC USES eax ebx edx esi
     add ebx, eax
     cmp ebx, 100
     ja RV_Exceso
-
-; Suma las unidades despues de revisar el limite.
     mov stocks[esi*4], ebx
     mov cambios, 1
-    mov edx, OFFSET mRecibido
-    call WriteString
+    MOSTRAR mRecibido
     ret
 RV_No:
     mov edx, OFFSET mNo
@@ -637,34 +623,27 @@ RV_Mensaje:
     ret
 Recibir ENDP
 
-
-; Vende prendas y aplica el descuento.
+; Entrada: codigo y cantidad. Salida: venta o mensaje de error.
+; Conserva: EAX, EBX, EDX, ESI.
 Vender PROC USES eax ebx edx esi
     call PedirProducto
     cmp eax, -1
     je V_No
     mov indice, eax
-    mov edx, OFFSET pedCant
-    call WriteString
-    call LeerTexto
-    call AEntero
+    call PedirCantidad
     cmp edx, 1
     jne V_Error
-    cmp eax, 1
-    jb V_Error
     mov esi, indice
     cmp eax, stocks[esi*4]
     ja V_Exceso
     mov cantidad, eax
 
-; Calcula el precio por la cantidad.
+    ; Subtotal = precio en centavos * unidades.
     mov eax, precios[esi*4]
     mul cantidad
     cmp edx, 0
     jne V_Error
     mov subtotal, eax
-
-; Decide si aplica 0, 10 o 15 por ciento.
     mov porcentaje, 0
     cmp cantidad, 20
     jae V_Quince
@@ -674,8 +653,6 @@ Vender PROC USES eax ebx edx esi
     jmp V_Calcular
 V_Quince:
     mov porcentaje, 15
-
-; Calcula cuanto se descuenta y el total.
 V_Calcular:
     mov eax, subtotal
     mul porcentaje
@@ -688,8 +665,7 @@ V_Calcular:
     sub eax, descuento
     mov total, eax
 
-
-; Revisa el total antes de quitar las prendas.
+    ; Confirmar que ingresos tampoco desborde antes de vender.
     mov eax, ingresos
     add eax, total
     jc V_Error
@@ -700,37 +676,14 @@ V_Calcular:
     mov stocks[esi*4], eax
     mov cambios, 1
 
-
-; Muestra los resultados de la venta.
-    mov edx, OFFSET mSubtotal
-    call WriteString
-    mov eax, subtotal
-    call MostrarPrecio
-    mov edx, OFFSET mMXN
-    call WriteString
-    call Crlf
-    mov edx, OFFSET mPorc
-    call WriteString
+    MOSTRAR_IMPORTE mSubtotal, subtotal
+    MOSTRAR mPorc
     mov eax, porcentaje
     call MostrarEntero
-    mov edx, OFFSET mPorcFin
-    call WriteString
-    mov edx, OFFSET mDescuento
-    call WriteString
-    mov eax, descuento
-    call MostrarPrecio
-    mov edx, OFFSET mMXN
-    call WriteString
-    call Crlf
-    mov edx, OFFSET mTotal
-    call WriteString
-    mov eax, total
-    call MostrarPrecio
-    mov edx, OFFSET mMXN
-    call WriteString
-    call Crlf
-    mov edx, OFFSET mVendido
-    call WriteString
+    MOSTRAR mPorcFin
+    MOSTRAR_IMPORTE mDescuento, descuento
+    MOSTRAR_IMPORTE mTotal, total
+    MOSTRAR mVendido
     ret
 V_No:
     mov edx, OFFSET mNo
@@ -745,14 +698,11 @@ V_Mensaje:
     ret
 Vender ENDP
 
-
-; Muestra las unidades, el valor y las ventas.
+; Entrada: inventario e ingresos. Salida: totales en consola. EAX/EBX/EDX/ESI preservados.
 Resumen PROC USES eax ebx edx esi
     xor esi, esi
-    xor ebx, ebx            ; Total de unidades
-    mov resultado, 0        ; Valor en centavos
-
-; Suma las unidades y el valor de cada prenda.
+    xor ebx, ebx            ; suma de unidades
+    mov resultado, 0        ; valor total en centavos
 RS_Bucle:
     cmp esi, numProductos
     jae RS_Mostrar
@@ -762,41 +712,24 @@ RS_Bucle:
     add resultado, eax
     inc esi
     jmp RS_Bucle
-
-; Muestra el resultado en pantalla.
 RS_Mostrar:
-    mov edx, OFFSET mUnidades
-    call WriteString
+    MOSTRAR mUnidades
     mov eax, ebx
     call MostrarEntero
     call Crlf
-    mov edx, OFFSET mValor
-    call WriteString
-    mov eax, resultado
-    call MostrarPrecio
-    mov edx, OFFSET mMXN
-    call WriteString
-    call Crlf
-    mov edx, OFFSET mIngresos
-    call WriteString
-    mov eax, ingresos
-    call MostrarPrecio
-    mov edx, OFFSET mMXN
-    call WriteString
-    call Crlf
+    MOSTRAR_IMPORTE mValor, resultado
+    MOSTRAR_IMPORTE mIngresos, ingresos
     ret
 Resumen ENDP
 
-
-; Guarda el inventario en ropa.dat.
+; Guardar exactamente 424 bytes. EAX=1 si tuvo exito.
+; Entrada: inventario. Salida: archivo y EAX=1/0. EBX/ECX/EDX preservados.
 Guardar PROC USES ebx ecx edx
     mov edx, OFFSET archivo
     call CreateOutputFile
     cmp eax, INVALID_HANDLE_VALUE
     je G_Error
     mov archivoHandle, eax
-
-; Guarda todos los datos juntos.
     mov edx, OFFSET inicioDatos
     mov ecx, TAM_DATOS
     call WriteToFile
@@ -808,29 +741,26 @@ Guardar PROC USES ebx ecx edx
     cmp resultado, TAM_DATOS
     jne G_Error
     mov cambios, 0
-    mov edx, OFFSET mGuardado
-    call WriteString
+    MOSTRAR mGuardado
     mov eax, 1
     ret
 G_CerrarError:
     mov eax, archivoHandle
     call CloseFile
 G_Error:
-    mov edx, OFFSET mArchivo
-    call WriteString
+    MOSTRAR mArchivo
     xor eax, eax
     ret
 Guardar ENDP
 
-
-; Revisa que el archivo tenga datos correctos.
+; Comprueba el archivo en memoria temporal ANTES de sustituir los datos.
+; Valida codigos, nombres, precios, existencias y codigos repetidos.
+; Entrada: bufferArchivo. Salida: EAX=1/0. EBX/ECX/EDX/ESI/EDI preservados.
 ArchivoValido PROC USES ebx ecx edx esi edi
     mov eax, DWORD PTR [bufferArchivo]
     cmp eax, MAX_PROD
     ja AV_Error
     xor ebx, ebx
-
-; Revisa cada producto del archivo.
 AV_Producto:
     cmp ebx, DWORD PTR [bufferArchivo]
     jae AV_Duplicados
@@ -866,8 +796,6 @@ AV_NombreOK:
     inc ebx
     jmp AV_Producto
 
-
-; Revisa que no haya codigos repetidos.
 AV_Duplicados:
     xor ebx, ebx
 AV_Externo:
@@ -903,16 +831,14 @@ AV_Error:
     ret
 ArchivoValido ENDP
 
-
-; Carga los productos del archivo.
+; Lee 425 bytes maximos, para detectar archivos demasiado largos.
+; Entrada: archivo en disco. Salida: inventario y EAX=1/0. EBX/ECX/EDX/ESI/EDI preservados.
 Cargar PROC USES ebx ecx edx esi edi
     mov edx, OFFSET archivo
     call OpenInputFile
     cmp eax, INVALID_HANDLE_VALUE
     je C_Error
     mov archivoHandle, eax
-
-; Lee el archivo en un espacio temporal.
     mov edx, OFFSET bufferArchivo
     mov ecx, TAM_DATOS + 1
     call ReadFromFile
@@ -923,8 +849,6 @@ Cargar PROC USES ebx ecx edx esi edi
     jc C_Error
     cmp bytesLeidos, TAM_DATOS
     jne C_Error
-
-; Revisa el archivo antes de cargar sus datos.
     call ArchivoValido
     cmp eax, 1
     jne C_Error
@@ -934,19 +858,16 @@ Cargar PROC USES ebx ecx edx esi edi
     cld
     rep movsb
     mov cambios, 0
-    mov edx, OFFSET mCargado
-    call WriteString
+    MOSTRAR mCargado
     mov eax, 1
     ret
 C_CerrarError:
     mov eax, archivoHandle
     call CloseFile
 C_Error:
-    mov edx, OFFSET mArchivo
-    call WriteString
+    MOSTRAR mArchivo
     xor eax, eax
     ret
 Cargar ENDP
-
 
 END main
